@@ -1,0 +1,520 @@
+/* 
+
+SUMMARY:
+This is a rope builder.
+It builds a dynamic rope chain using a hair follice as its driving force.
+Setting the radio group to chain will also model and attach a set of chain links. 
+LOVE IT.
+
+ABOUT:
+Author: Adam (AJ) Gillespie
+Date: 09/18/2015 
+
+*/
+
+if (`window -exists testThing`) deleteUI testThing;
+        window -title "Rope Builder v 3.0" -widthHeight 315 470 testThing;
+            if (`windowPref -exists testThing`) windowPref -remove testThing;     
+    
+/////////////////////////////////////////////////////////
+//                   GLOBAL PROCS
+/////////////////////////////////////////////////////////
+
+global proc ajInputError()
+{
+    string $window = `window -title "WHOA!"
+       -iconName "Short Name"
+       -widthHeight 200 80`;
+        columnLayout -adjustableColumn true;
+        text -label "";
+        text -label "Chain Links Not created!";
+        text -label "This means nothing will happen!";
+        text -label "";
+       button -label "I'll fix it! OMG!" -command ("deleteUI -window " + $window);
+    setParent ..;
+    showWindow $window;
+}
+
+global proc ajChangeJointDisplaySize()
+{
+    float $jointDisplaySize = `floatSliderGrp -q -value jointDisplaySizeSlider`;
+    
+    jointDisplayScale $jointDisplaySize;
+}
+
+global proc ajChainLinkRadius()
+{
+    string $previousSelection[] = `ls -sl`;
+    float $chainLinkThickness = `floatSliderGrp -q -value chainLinkThickness`;
+    if (`objExists chainLinkBroToLoft1`)
+    {
+        setAttr chainLinkBroToLoft1.sx $chainLinkThickness;
+        setAttr chainLinkBroToLoft1.sy $chainLinkThickness;
+        setAttr chainLinkBroToLoft1.sz $chainLinkThickness;
+    }
+    
+}
+
+
+global proc ajChainLinkSize()
+{
+    string $previousSelection[] = `ls -sl`;
+    float $chainLinkSize = `floatSliderGrp -q -value chainLinkSize`;
+    if (`objExists chainLinkBro1`)
+    {
+        setAttr chainLinkBro1.sx $chainLinkSize;
+        setAttr chainLinkBro1.sy $chainLinkSize;
+        setAttr chainLinkBro1.sz $chainLinkSize;
+    }
+    
+}
+
+/////////////////////////////////////////////////////////
+//                   USER INTERFACE
+/////////////////////////////////////////////////////////
+//Left Column
+scrollLayout -horizontalScrollBarThickness 16 -verticalScrollBarThickness 16;
+    rowLayout -numberOfColumns 2 -columnWidth3 80 75 150;        
+        frameLayout -label "Rope Builder" -w 150 -h 350 -borderStyle "etchedIn";    
+            columnLayout;       
+                text -label "Create Rope";
+                separator -w 120 -style "single";                
+                text -label "";
+                    rowLayout -numberOfColumns 2 -columnWidth3 80 75 150 -adjustableColumn true;
+                        columnLayout;
+                    	    text -label "Joint Count";
+                            intField -w 60 -value 30 jointInput;
+                        setParent ..;
+                        columnLayout;
+                            text -label "  Joint Spacing";
+                            floatField -w 60 -value 1.5 -precision 2 jointSpaceInput;
+                        setParent ..;
+                    setParent ..;
+                    rowLayout -numberOfColumns 2 -columnWidth3 80 75 150 -adjustableColumn true;
+                        text -label "  X Offset";
+                        text -label "     CTRL size";
+                    setParent ..;
+                    rowLayout -numberOfColumns 2 -columnWidth3 80 75 150 -adjustableColumn true;
+                        floatField -w 60 -value 0 -precision 2 jointOffsetInput;
+                        floatField -w 60 -value 20 -precision 2 ctrlSizeInput;
+                    setParent ..;           
+                separator -w 150 -style "single";
+        	    separator -w 150 -style "single";
+                text -label "";
+                optionMenu -label "Rope Type" ropeTypeMenu;
+                    menuItem -label "Hangy";
+                    menuItem -label "Both Ends";
+                    text -label "";
+                    separator -w 150 -style "single";
+        	        separator -w 150 -style "single";
+        	        text -label "Attached Geo";
+        	        text -label "";
+                    radioButtonGrp 
+                        -nrb 4 -cw 1 40 -cw 2 35 -cw 3 35 -cw 4 30
+                        -en1 true -sl 1
+                        geoRadio;
+                rowLayout -numberOfColumns 4 -columnWidth3 80 75 150;
+                    text -label "None";
+                    text -label "   Hose";
+                    text -label "   Chain";
+                    text -label "  Custom";
+                setParent ..;
+                text -label "";
+                rowLayout -numberOfColumns 2 -columnWidth3 80 75 150 -adjustableColumn true;
+                    text -label "Hose Radius:     ";
+                    floatField -w 60 -value 1 -precision 2 ajHoseRadius; 
+                setParent ..; 
+                    text -label "Chain Link Size";
+                    floatSliderGrp -min 0 -max 2 -value .1 -w 150 -f true -dc "ajChainLinkSize" -cc "ajChainLinkSize" chainLinkSize; 
+                    text -label "Chain Link Thickness";
+                    floatSliderGrp -min 0 -max 2 -value .2 -w 150 -f true -dc "ajChainLinkRadius" -cc "ajChainLinkRadius" chainLinkThickness;   
+            setParent ..; //First column (left side)
+        setParent ..; //Rope builder framelayout parent
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Right Column
+        frameLayout -label "Settings" -w 150 -h 350 -borderStyle "etchedIn";
+            columnLayout;
+                text -label "Joint Display Size";
+                floatSliderGrp -min 0 -max 10 -value 2 -w 150 -f true -dc "ajChangeJointDisplaySize" -cc "ajChangeJointDisplaySize" jointDisplaySizeSlider; 
+                    rowLayout -numberOfColumns 2 -columnWidth3 80 75 150 -adjustableColumn true;
+                        text -label " Gravity             ";
+                        floatField -w 60 -value 200 -precision 2 ajGravity; 
+                    setParent ..;  
+                    rowLayout -numberOfColumns 2 -columnWidth3 80 75 150 -adjustableColumn true;
+                        text -label " Stretch Res      ";
+                        floatField -w 60 -value 100 -precision 2 ajStretch; 
+                    setParent ..;  
+                    rowLayout -numberOfColumns 2 -columnWidth3 80 75 150 -adjustableColumn true;
+                        text -label " Compression    ";
+                        floatField -w 60 -value 100 -precision 2 ajCompression; 
+                    setParent ..; 
+                    columnLayout;
+                        button -label "Detach Bottom Link" -command "ajDetachBottom";
+                    setParent ..;             
+            setParent ..;
+        setParent ..; //Settings framelayout parent
+    setParent ..; //MAIN ROWLAYOUT
+separator -w 300 -style "single";
+separator -w 300 -style "single";
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//Bottom buttons
+    frameLayout -label "CREATE ROPES" -li 100 -w 300 -borderStyle "etchedIn";
+        columnLayout;
+            rowLayout -numberOfColumns 2 -columnWidth3 80 75 150;                  
+                button -label "CreateJoints" -w 150 -command "jointCreation"; 
+                button -label "Interactive Playback" -w 150 -command "currentTime 0; InteractivePlayback;"; 
+            setParent ..;
+            rowLayout -numberOfColumns 2 -columnWidth3 80 75 150; 
+                button -label "Create Collider Box" -w 150 -command "ajCreateRigidBodyTestBox;"; 
+                button -label "Make Selection Rigid Body" -w 150 -command "makeCollideNCloth;;";                
+            setParent ..; 
+            rowLayout -numberOfColumns 2 -columnWidth3 80 75 150; 
+                button -label "Check CV's" -w 150 -command "testButton;"; 
+                button -label "Query Obj type" -w 150 -command "ajQueryObjType;";                
+            setParent ..; 
+        setParent ..;
+    setParent ..; //Settings framelayout parent
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////
+setParent ..; //ScrollLayout Parent
+
+/////////////////////////////////////////////////////////
+//                   PROCS
+/////////////////////////////////////////////////////////
+
+proc jointCreation()
+{
+    //Clear Selection and starting variables
+    select -cl;
+    string $selection[] = `ls -sl`;
+    int $i;
+    int $n;
+    int $o;
+    string $grouping[];
+    string $nucleus[];
+    string $bottomCTRL[];
+    int $geoSelection = `radioButtonGrp -q -select geoRadio`;
+    int $jointInput = `intField -q -value jointInput`;
+    float $chainLinkThickness = `floatSliderGrp -q -value chainLinkThickness`;
+    float $chainLinkSize = `floatSliderGrp -q -value chainLinkSize`;
+    float $jointSpaceInput = `floatField -q -value jointSpaceInput`;
+    float $ajHoseRadius = `floatField -q -value ajHoseRadius`;
+    float $jointOffsetInput = `floatField -q -value jointOffsetInput`;
+    float $ctrlSizeInput = `floatField -q -value ctrlSizeInput`;
+    float $ajGravity = `floatField -q -value ajGravity`;
+    float $ajStretch = `floatField -q -value ajStretch`;
+    float $ajCompression = `floatField -q -value ajCompression`;
+    int $ropeType = `optionMenu -q -sl ropeTypeMenu`;
+    
+    //Create the initial joint set
+    joint -p $jointOffsetInput ($jointInput * abs($jointSpaceInput)) 0 ;
+    string $newJoints[] = `ls -sl`;
+    duplicate -rr; 
+    move -r 0 (-($jointSpaceInput)) 0;
+    string $initialDupeJoint[] = `ls -sl`;
+    appendStringArray($newJoints, $initialDupeJoint, 1);    
+    for ($i=0;$i<($jointInput-2);$i=$i+1)
+    {
+        duplicate -rr -st;
+        string $addedJoint[] = `ls -sl`;
+        appendStringArray($newJoints, $addedJoint, 1);
+    }
+    
+    //Parent joints into a hierarchy
+    select -r $newJoints;
+    for ($i=1;$i<size($newJoints);$i=$i+1)
+    {
+        parent $newJoints[$i] $newJoints[$i-1];
+    }
+        
+    select -r $newJoints;
+    print ($newJoints);
+    //Reset Ik Handle Settings
+    IKSplineHandleTool;
+    ikSplineHandleCtx -e 
+    -priorityH 1
+    -weightH 1
+    -poWeightH 1
+    -autoPriorityH 0
+    -snapHandleH 1
+    -forceSolverH 1
+    -stickyH "off" 
+    -createCurve 1
+    -simplifyCurve 0
+    -rootOnCurve 1
+    -twistType "linear" 
+    -createRootAxis 0
+    -parentCurve 1
+    -snapCurve 0
+    -numSpans 1
+    -rootTwistMode 0
+    ikSplineHandleContext;
+ 
+    //Create curve from ikSpline
+    int $jointCount = size($newJoints)-1;
+    select -r $newJoints[0] $newJoints[$jointCount];
+    string $ikHandleToDelete[] = `ls -sl`;
+    string $origCurve[] = `listConnections -type "shape"`;
+    delete;
+    select -r $origCurve;
+    duplicate -rr;
+    string $dynamicCurve[] = `ls -sl`;
+    delete;
+    
+    //Make the curve dynamic
+    select -r $origCurve;
+    makeCurvesDynamic 2 { "0", "0", "1", "1", "0"};
+    
+    select -r $newJoints[0];
+    pickWalk -d right;
+    string $hairSystem[] = `ls -sl`; 
+    pickWalk -d right;
+    string $nucleusTest[] = `ls -sl`;
+    if (`objectType -isType "nucleus" $nucleusTest`)
+        {
+            appendStringArray($nucleus, $nucleusTest, 1) ;
+            appendStringArray($grouping, $nucleus, 1);
+            pickWalk -d right;   
+        } 
+    string $follicleRoot[] = `ls -sl`;
+    pickWalk -d right;
+    string $hairSystemRoot[] = `ls -sl`; 
+    select -r $origCurve;
+    pickWalk -d up; pickWalk -d down;    
+    string $follicleShape[] = `ls -sl`;  
+    setAttr ($origCurve[0] + ".v") 0;     
+    
+    //Set the joints to follow the hair follicle
+    IKSplineHandleTool;
+    ikSplineHandleCtx -e 
+    -createCurve 0
+    -simplifyCurve 0
+    -rootOnCurve 0
+    -twistType "linear" 
+    -createRootAxis 0
+    -parentCurve 0
+    -snapCurve 0
+    -numSpans 0
+    -rootTwistMode 0
+    ikSplineHandleContext;
+    
+    select -r $newJoints[0] $newJoints[($jointInput-2)] $dynamicCurve[0];
+    string $newIKHandle[] = `ls -sl`;
+    
+    //Create controlly bros
+    circle -ch on -o on -nr 0 1 0 -r $ctrlSizeInput ;
+    rename topCTRL;
+    move -r $jointOffsetInput ($jointInput * abs($jointSpaceInput)) 0;
+    string $topCTRL[] = `ls -sl`;
+    
+    //Hangy Shit
+    if ($ropeType == 2)
+    {
+        circle -ch on -o on -nr 0 1 0 -r $ctrlSizeInput ;
+        rename bottomCTRL;
+        move -r $jointOffsetInput ($jointInput * abs($jointSpaceInput)) 0;
+        move -r 0 (-($jointSpaceInput * ($jointInput -1))) 0;
+        string $bottomCTRLAdd[] = `ls -sl`;
+        appendStringArray($bottomCTRL, $bottomCTRLAdd, 1) ;
+        select -r $dynamicCurve;
+        int $numSpans = `getAttr ( $dynamicCurve[0] + ".spans" )`;
+        int $degree   = `getAttr ( $dynamicCurve[0] + ".degree" )`;
+        int $form     = `getAttr ( $dynamicCurve[0] + ".form" )`;    
+        int $numCVs   = $numSpans + $degree;
+        hilite $dynamicCurve[0] ;
+        select -r (($dynamicCurve[0]) + ".cv[" + ($numCVs -1) + "]") ;
+        createNConstraint transform 0;
+        pickWalk -d up;
+        string $dynamicConstraint[] = `ls -sl`;
+        parent $dynamicConstraint $bottomCTRL; 
+        setAttr ($dynamicConstraint[0] + ".constraintMethod") 0;
+        appendStringArray($grouping, $bottomCTRL, 1); 
+        select -r $topCTRL;          
+    }        
+
+    setAttr ($follicleShape[0] + ".pointLock") 0;
+    hilite $dynamicCurve[0] ;
+    select -r (($dynamicCurve[0]) + ".cv[0]") ;
+    createNConstraint transform 0;
+    pickWalk -d up;
+    string $dynamicConstraintTop[] = `ls -sl`;
+    
+    parent $dynamicConstraintTop $topCTRL;
+    parentConstraint $topCTRL $newJoints[0];
+    setAttr ($dynamicConstraintTop[0] + ".constraintMethod") 0;
+    if (`objExists $nucleus[0]`)
+    {
+        setAttr ($nucleus[0] + ".gravity") $ajGravity;
+    }   
+    setAttr ($hairSystem[0] + ".stretchResistance") $ajStretch;
+    setAttr ($hairSystem[0] + ".compressionResistance") $ajCompression;
+    
+    //Parenting, cleanup and settings
+    parent $follicleRoot $topCTRL;
+    select -r $newJoints[0] $topCTRL $hairSystem $hairSystemRoot $newIKHandle;
+    string $grouped[] = `ls -sl`;
+    appendStringArray($grouping, $grouped, 5);
+    if (`objExists $nucleus[0]`)
+    {
+        appendStringArray($grouping, $nucleus, 1);
+    } 
+    if (`objExists $bottomCTRL[0]`)
+    {
+        appendStringArray($grouping, $bottomCTRL, 1);
+    }    
+        
+    ////////////////////////////////
+    //Create Hose
+    ////////////////////////////////
+    if ($geoSelection == 2)
+    {
+        polyCylinder -r $ajHoseRadius -h ($jointInput * $jointSpaceInput) -sy $jointInput;
+        string $hose[] = `ls -sl`;
+        move -r $jointOffsetInput (($jointInput * abs($jointSpaceInput))/2) 0;
+        select -add $newJoints; 
+        SmoothBindSkin;
+    }
+    ////////////////////////////////
+    //Create Chain
+    ////////////////////////////////
+    if ($geoSelection == 3)
+    {
+        circle -nr 0 1 0 -r 5 ;
+        rename chainLinkBro1;
+        string $chainLinkBro1[] = `ls -sl`;
+        
+        //Find creation node
+        pickWalk -d down;
+        string $selected[] = `ls -sl`;
+        string $nurbsCircle[] = `listConnections -t makeNurbCircle`;
+        
+        hilite $chainLinkBro1[0] ;
+        
+        setAttr ($nurbsCircle[0] + ".sections") 20;
+        select -r ($chainLinkBro1[0] + ".cv[7:15]") ;
+        TranslateToolWithSnapMarkingMenu;
+        MarkingMenuPopDown;
+        move -r 0 0 5 ;
+        select -r ($chainLinkBro1[0] + ".cv[0:5]") ($chainLinkBro1[0] + ".cv[17:19]") ;
+        move -r 0 0 -5 ;
+        select -r $chainLinkBro1;
+        move 0 0 (-10 + ($chainLinkSize)/2) ($chainLinkBro1[0] + ".scalePivot") ($chainLinkBro1[0] + ".rotatePivot") ;  
+        
+        circle -ch on -o on -nr 0 1 0 -r 1 ;
+        rename chainLinkBroToLoft1;
+        string $chainLinkBroToLoft1[] = `ls -sl`;
+        setAttr ($chainLinkBroToLoft1[0] + ".rotateX") 90;
+        extrude -ch true -rn false -po 1 -et 2 -ucp 1 -fpt 1 -upn 1 -rotation 0 -scale 1 -rsp 1 $chainLinkBroToLoft1[0] $chainLinkBro1[0] ;
+        print ("-------------------------------------\n");
+        
+        string $chainLink[] = `ls -sl`;
+        move 0 0 (-10 + ($chainLinkSize)/2) ($chainLink[0] + ".scalePivot") ($chainLink[0] + ".rotatePivot") ;  
+        
+        move -ws 0 0 (10 - ($chainLinkSize)/2); rotate -r 90 0 0;
+        channelBoxCommand -freezeAll;
+        
+        setAttr chainLinkBro1.sx .2;
+        setAttr chainLinkBro1.sy .2;
+        setAttr chainLinkBro1.sz .2;
+        channelBoxCommand -freezeAll;
+        
+        setAttr chainLinkBro1.sx $chainLinkSize;
+        setAttr chainLinkBro1.sy $chainLinkSize;
+        setAttr chainLinkBro1.sz $chainLinkSize;
+        setAttr chainLinkBroToLoft1.sx $chainLinkThickness;
+        setAttr chainLinkBroToLoft1.sy $chainLinkThickness;
+        setAttr chainLinkBroToLoft1.sz $chainLinkThickness;
+        
+        for ($o=0; $o<size($newJoints);$o=$o+1)
+        {
+            select -r $chainLink[0];
+            instance;
+            string $instanced[] = `ls -sl`;
+            parent $instanced[0] $newJoints[$o];
+            move 0 0 0;            
+            string $attr[] = {".tx",".ty",".tz",".rx",".ry",".rz"};
+            for ($n=0;$n<size($attr);$n=$n+1)
+            {
+                setAttr ($instanced[0] + $attr[$n]) 0;
+            }
+            rotate 0 (90 * $o) 0;           
+        }
+    }
+    
+    //Grouping the shit
+    group $grouping; 
+    string $groupName[] = `ls -sl`;
+    rename $groupName "ropeGrp1";
+    
+} 
+
+proc testButton()
+{
+    int $ropeType = `optionMenu -q -sl ropeTypeMenu`;
+    print ($ropeType);
+}
+
+proc ajQueryObjType()
+{
+    string $selection[] = `ls -sl`;
+    string $poop = `objectType $selection[0]`;
+    print($poop);
+
+}
+
+proc ajCreateRigidBodyTestBox()
+{
+    string $nucleus[];
+    float $ajGravity = `floatField -q -value ajGravity`;
+    polyCube -ch on -o on -w 20 -h 10 -d 20 -cuv 4 ;
+    string $box[] = `ls -sl`;
+    makeCollideNCloth;
+    string $collider[] = `ls -sl`;
+    if (`objExists rigidBodyGrp`)
+    {
+        parent $collider rigidBodyGrp;
+    }
+    else
+    {
+        group -em -n rigidBodyGrp;
+        parent $collider rigidBodyGrp;
+    }
+    pickWalk -d up; pickWalk -d left;
+    string $nucleusTest[] = `ls -sl`;
+    if (`objectType -isType "nucleus" $nucleusTest`)
+    {
+        appendStringArray($nucleus, $nucleusTest, 1) ;  
+    }
+    if (`objExists $nucleus[0]`)
+    {
+        setAttr ($nucleus[0] + ".gravity") $ajGravity;
+    }  
+    
+}
+
+proc ajDetachBottom()
+{
+    string $selection[] = `ls -sl`;
+    int $i;
+    print ($selection[0]);
+    if ($selection[0] == "bottomCTRL")
+    {
+        pickWalk -d down; pickWalk -d left; pickWalk -d down;
+        string $dynamic[] = `ls -sl`;
+        select -r $selection[0];
+        setAttr ($dynamic[0] + ".glueStrength") 0;
+    } 
+    
+    if ($selection[0] == "topCTRL")
+    {
+        pickWalk -d left; pickWalk -d left; pickWalk -d down; pickWalk -d left; pickWalk -d down;
+        string $dynamic[] = `ls -sl`;
+        select -r $selection[0];
+        setAttr ($dynamic[0] + ".glueStrength") 0;
+    } 
+    
+}
+
+            
+showWindow testThing;
