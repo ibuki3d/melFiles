@@ -1,0 +1,8 @@
+proc ajToggleTheseBros()
+{
+    string $bros[] = {"-joints", "-nurbsCurves"};
+    string $panel = `getPanel -wf`;
+    for ($bro in $bros){
+        modelEditor -e $bro (!`modelEditor -q $bro $panel`) $panel;}
+}
+ajToggleTheseBros();
