@@ -1,0 +1,1398 @@
+if (`window -exists maryTools`) deleteUI maryTools;
+        window -title "Super Previs Toolz v1.3" -widthHeight 320 350 maryTools;
+            //if (`windowPref -exists maryTools`) windowPref -remove maryTools;
+	
+///////////////////////////////////////////////////////
+//              Global Procs
+/////////////////////////////////////////////////////// 
+
+global proc int ajDetectAnimation( string $obj) 
+{
+	string $animated[] = `listConnections -s true -d false $obj`;
+	if(size($animated) == 0) return(0);
+	string $i;
+	for($i in $animated) {
+		string $n[];
+		tokenize $i "_" $n;
+		switch ($n[1]) {
+			case "translateX" :
+			case "translateY" :
+			case "translateZ" :
+			case "rotateX" :
+			case "rotateY" :
+			case "rotateZ" :
+				return(1) ;
+			default:
+				break;
+		}
+	}
+	return(0);
+}
+
+global proc ajInvertChannelAnim(string $obj, string $channel)
+{
+    selectKey -attribute $channel $obj;
+    float $values[] = `keyframe -query -valueChange ($obj + "." + $channel)`;
+    for ($i =0; $i < `size $values`; $i++)
+    {
+    	$values[$i] *=-1.0;
+    	keyframe -edit -index $i -valueChange $values[$i] ($obj + "." + $channel);
+    } 
+} 
+
+global proc ajInputError()
+{
+    string $window = `window -title "WHOA!"
+       -iconName "Short Name"
+       -widthHeight 200 80`;
+        columnLayout -adjustableColumn true;
+        text -label "";
+        text -label "Input Controls at 0!";
+        text -label "This means nothing will happen!";
+        text -label "";
+       button -label "I'll fix it! OMG!" -command ("deleteUI -window " + $window);
+    setParent ..;
+    showWindow $window;
+}
+
+global proc ajNothingSelected()
+{
+    string $window = `window -title "WHOA!"
+       -iconName "Short Name"
+       -widthHeight 200 80`;
+        columnLayout -adjustableColumn true;
+        text -label "";
+        text -label "You gotta select something!";
+        text -label "Ermagerde!!!";
+        text -label "";
+       button -label "I'll fix it! OMG!" -command ("deleteUI -window " + $window);
+    setParent ..;
+    showWindow $window;
+}
+
+///////////////////////////////////////////////////////
+//              ANNOTATIONS
+///////////////////////////////////////////////////////
+
+string $annTangent[] = {
+//Auto Tangent = 0
+"--Sets Keys to Auto along the curve--" +
+"\n ----------------------------------  \n" +
+"\n To do this the long way:\n" +
+"\n- Open your graph editor with the animated object selected. " +
+"\n- Select the keys you would like to be auto (or just the curve for the whole timeframe)" +
+"\n- Either right click and Tangents >> Auto or click the auto button at the top. \n",
+
+//Linear Tangent = 1                            
+"--Sets Keys to Linear on the current frame--" +
+"\n ----------------------------------  \n" +
+"\n To do this the long way:\n" +
+"\n- Open your graph editor with the animated object selected. " +
+"\n- Select the keys you would like to be linear" +
+"\n- Either right click and Tangents >> Linear or click the Linear button at the top. \n", 
+
+//Stepped Tangent = 2                            
+"--Sets Keys to Stepped along the curve--" +
+"\n ----------------------------------  \n" +
+"\n To do this the long way:\n" +
+"\n- Open your graph editor with the animated object selected. " +
+"\n- Select the keys you would like to be stepped" +
+"\n- Either right click and Tangents >> Stepped or click the Stepped button at the top. \n",
+
+//Cycle curves = 3                            
+"--Sets the curves to cycle on infinity--" +
+"\n ----------------------------------  \n" +
+"\n To do this the long way:\n" +
+"\n- Open your graph editor with the animated object selected. " +
+"\n- Select the keys you would like to be stepped" +
+"\n- Either right click and Tangents >> Stepped or click the Stepped button at the top. \n"};
+
+///////////////////////////////////////////////////////
+//              GUI START
+/////////////////////////////////////////////////////// 
+
+scrollLayout;
+    rowLayout -numberOfColumns 2 -columnWidth3 80 75 150 ;   
+
+/////////////////////////
+//Saving
+        frameLayout -label "Saving" -collapsable true;
+            rowLayout -numberOfColumns 2 -columnWidth3 80 75 150 -adjustableColumn true;
+                    button -label "Save" -w 40 -command "saveScene";
+                    button -label "Save as" -w 80 -command "saveAs";
+            setParent ..;
+            
+            rowLayout -numberOfColumns 2 -columnWidth3 80 75 150 -adjustableColumn true;
+                button -label "Version Up" -w 80 -command "savePlusProc";
+            setParent ..;
+        setParent ..;
+        
+        columnLayout;            
+            frameLayout -label "Input Controls and Effectors" -borderStyle "etchedIn";    
+                columnLayout;
+                    rowLayout -numberOfColumns 3;
+                        text -label "               ";
+                        text -label "Input";
+                        intField -w 40 -value 0 animInputInt;
+                    setParent ..;
+                    
+                setParent ..;
+            text -label "Translation  ||   Rotation";
+            text -label "   X   Y   Z   ||   X   Y   Z";  
+                rowLayout -numberOfColumns 8;
+                    text -label "          ";                   
+                    checkBox -label "" -onc "$ajTX = 1" -ofc "$ajTX = 0" -v true ajTXCheck;
+                    checkBox -label "" -onc "$ajTY = 1" -ofc "$ajTY = 0" -v true ajTYCheck;
+                    checkBox -label "" -onc "$ajTZ = 1" -ofc "$ajTZ = 0" -v true ajTZCheck;
+                    text -label "  || ";
+                    checkBox -label "" -onc "$ajRX = 1" -ofc "$ajRX = 0" -v true ajRXCheck;
+                    checkBox -label "" -onc "$ajRY = 1" -ofc "$ajRY = 0" -v true ajRYCheck;
+                    checkBox -label "" -onc "$ajRZ = 1" -ofc "$ajRZ = 0" -v true ajRZCheck;
+                setParent ..;
+            setParent ..;
+        setParent ..;
+    setParent ..;
+setParent ..; 
+
+///////////////////////////////////////////////////////
+//              Important Windows
+/////////////////////////////////////////////////////// 
+frameLayout -collapsable true -collapse true -label "Important Windows" -w 300;
+    columnLayout;
+        button -label "Graph Editor" -w 120 -command "showGraphEditor";
+        button -label "Namespace Editor" -w 120 -command "showNamespaceEditor";
+        button -label "Reference Editor" -w 120 -command "ReferenceEditor;"; 
+        button -label "Expression Editor" -w 120 -command "ExpressionEditor;";               
+    setParent ..;
+setParent ..;
+
+///////////////////////////////////////////////////////
+//              ANIM STUFF
+/////////////////////////////////////////////////////// 
+
+frameLayout -label "ANIM STUFF" -borderStyle "etchedIn" -collapsable true -collapse true -w 300;
+    tabLayout; //tabLayout 
+    //button -label "Set Key on TR" -w 120 -command "ajSetKeyOnTR";
+
+/////////////////////////
+//Common Anim CTRLs            
+            rowLayout  -numberOfColumns 2 -columnWidth3 80 75 150 -adjustableColumn 2 Common;
+                columnLayout;
+            	    button -label "Set Key on TR" -w 120 -command "ajSetKeyOnTR";
+            	setParent ..;
+            setParent ..; //tangents tab    
+
+/////////////////////////
+//Tangents Tab              
+            rowLayout  -numberOfColumns 2 -columnWidth3 80 75 150 -adjustableColumn 2 Tangents;
+                columnLayout;
+            	    button -label "Auto" -w 65 -command "autoTangent" -ann ($annTangent[0]);
+            	    button -label "Stepped" -w 65 -command "steppedTangent" -ann ($annTangent[2]);
+            	setParent ..;
+            	
+            	columnLayout;
+            	    button -label "Linear" -w 65 -command "linearTangent" -ann ($annTangent[1]);
+        	        button -label "Cycle Curves" -w 65 -command "cycleCurves" -ann ($annTangent[3]);
+            	setParent ..;
+            setParent ..; //tangents tab
+        
+/////////////////////////
+//Randomize Tab
+        rowLayout  -numberOfColumns 2 -columnWidth3 80 75 150 -adjustableColumn 2 Randomize;
+            columnLayout;
+        	    button -label "Randomize Anim" -w 130 -command "ajRandomizeAnim";        	                
+        	    button -label "Randomize Placement" -w 130 -command "ajRandomizePlacement";  
+        	    button -label "Randomize Scale" -w 130 -command "ajRandomizeScale";      	             
+            setParent ..;  
+        setParent ..; //Randomize Tab 
+
+/////////////////////////
+//TimeSlip Tab
+        columnLayout Time_Slip;
+            rowLayout -numberOfColumns 3;
+                checkBox -label "Enable" -onc "$ajSlipEnable = 1" -ofc "$ajSlipEnable = 0" ajSlipEnableCheck2;
+                button -label "Reset" -w 60 -command "animSliderInput";        
+                floatSliderGrp -w 40 -min -1000 -max 1000 -value 0 -field true animSliderInput;
+            setParent ..;  
+            rowLayout -numberOfColumns 4;
+                text -label "Slip what?";
+                checkBox -label "Time" -onc "$ajSlipEnable = 1" -ofc "$ajSlipEnable = 0" ajTimeSlipEnableCheck;
+                checkBox -label "Trans/Rot" -onc "$ajSlipEnable = 1" -ofc "$ajSlipEnable = 0" ajTRSlipEnableCheck;        
+            setParent ..;  
+        setParent ..; //Timeslip tab
+    setParent ..; // Tab Layout
+    
+/////////////////////////
+//Andy Rig
+        frameLayout -label "Andy Rig for Mary" -w 150;
+            rowLayout -numberOfColumns 2 -columnWidth3 80 75 150 -adjustableColumn 2;
+                columnLayout;
+                    button -label "Set Pose" -w 120 -command "ajSetPose";
+                    button -label "Face Controls" -w 120 -command "ajAndyFaceCTRLs";
+                setParent ..;
+                columnLayout;
+                    
+                setParent ..;
+            setParent ..;
+        setParent ..; 
+        
+////////////////////////////////////////////////////////
+ 
+setParent ..; //Anim Layout
+
+///////////////////////////////////////////////////////
+//              Constraining Stuff
+/////////////////////////////////////////////////////// 
+
+frameLayout -label "CONSTRAIN STUFF" -borderStyle "etchedIn" -collapsable true -collapse true -w 300;  //FOURTH Frame Layout
+    rowLayout -numberOfColumns 2 -columnWidth3 80 75 150 -adjustableColumn true;    //FOURTH Row layout               
+    
+/////////////////////////
+//Constraints
+        frameLayout -label "A to B" -w 150;
+            rowLayout -numberOfColumns 2 -columnWidth3 80 75 150 -adjustableColumn 2;
+                columnLayout;
+            	    button -label "Parent" -w 65 -command "ajParentConstraint";
+            	    button -label "Point" -w 65 -command "pointConstraint -mo -weight 1;";
+            	setParent ..;
+            	columnLayout;
+            	    button -label "Aim" -w 65 -command "aimConstraint -mo -weight 1 -aimVector 1 0 0 -upVector 0 1 0 -worldUpVector 0 1 0;";
+            	    button -label "Motion Path" -w 65 -command "pointConstraint -mo -weight 1;";
+                setParent ..;
+            setParent ..;
+        setParent ..;
+        
+/////////////////////////
+//Locator Options
+        frameLayout -label "Create Locators" -w 150;
+            rowLayout -numberOfColumns 2 -columnWidth3 80 75 150 -adjustableColumn 2;
+                columnLayout;
+            	    button -label "At 0" -w 60 -command "spaceLocator -n LocatorBro -p 0 0 0;";            	    
+            	    button -label "Select Locs" -w 60 -command "string $locs[] = eval(\"listRelatives -p `ls -type locator`\");select $locs;";
+                setParent ..;
+                
+                columnLayout;
+            	    button -label "Objects on Locs" -w 80 -command "ajCreateLocatorObjectOn";
+            	    button -label "Locs on Objects" -w 80 -command "ajCreateLocatorOnObject";        	    
+                setParent ..;
+            setParent ..;
+        setParent ..;
+    setParent ..;
+setParent ..; 
+
+///////////////////////////////////////////////////////
+//              EXPORT STUFF
+/////////////////////////////////////////////////////// 
+frameLayout -label "EXPORT STUFF" -borderStyle "etchedIn" -collapsable true -collapse true -w 300;  //FOURTH Frame Layout
+    rowLayout -numberOfColumns 2 -columnWidth3 80 75 150 -adjustableColumn true;    //FOURTH Row layout               
+    
+/////////////////////////
+//Joint Options
+        frameLayout -label "Select Joints" -w 150;
+            rowLayout -numberOfColumns 2 -columnWidth3 80 75 150 -adjustableColumn 2;
+                columnLayout;
+            	    button -label "All Joints" -w 120 -command "ajSelectJoints";
+            	    button -label "Animated Joints" -w 120 -command "ajSelectAnimationJoints";
+                setParent ..;
+            setParent ..;
+        setParent ..;
+        
+/////////////////////////
+//Baking Options
+        frameLayout -label "Baking" -w 150;
+            rowLayout -numberOfColumns 2 -columnWidth3 80 75 150 -adjustableColumn 2;
+                columnLayout;
+            	    button -label "Bake Joints" -w 120 -command "ajBakeJoints";
+            	    button -label "Bake Selected" -w 120 -command "ajBakeSelected";
+                setParent ..;
+            setParent ..;
+        setParent ..;       
+    setParent ..;
+setParent ..; 
+
+///////////////////////////////////////////////////////
+//              RIGGING STUFF
+/////////////////////////////////////////////////////// 
+
+frameLayout -label "RIGGING STUFF" -borderStyle "etchedIn" -collapsable true -collapse true -w 300; 
+        
+/////////////////////////
+//Selection and Locks
+    rowLayout -numberOfColumns 2 -columnWidth3 80 75 150 -adjustableColumn true; 
+        frameLayout -label "Selection" -w 150;
+            columnLayout;
+               button -label "Select Hierarchy" -w 120 -command "select -hi"; 
+           setParent ..;
+       setParent ..;
+        frameLayout -label "Locks" -w 150;
+            columnLayout;
+        	    button -label "Unlock Attributes" -w 120 -command "ajUnlockAttributes";
+        	    button -label "Lock Attributes" -w 120 -command "ajLockAttributes";	           	    
+            setParent ..;
+        setParent ..;      
+    setParent ..;
+    
+/////////////////////////
+//Selection and Locks
+    rowLayout -numberOfColumns 2 -columnWidth3 80 75 150 -adjustableColumn true; 
+        frameLayout -label "Pivots" -w 150;
+            columnLayout;
+               button -label "Reset Pivots" -w 120 -command "ajResetPivot";  
+           setParent ..;
+       setParent ..;
+        frameLayout -label "Skinning" -w 150;
+            columnLayout;
+                rowLayout -numberOfColumns 3;
+            	    symbolButton -image "smoothSkin.png" -ann "Smooth Bind" -command "SmoothBindSkin";
+            	    symbolButton -image "exportSmoothSkin.png" -ann "Export Skin Weights" -command "ExportSkinWeightMaps"; 
+            	    symbolButton -image "importSmoothSkin.png" -ann "Import Skin Weights" -command "ImportSkinWeightMaps";     	    
+                setParent ..;
+                rowLayout -numberOfColumns 3;
+                    button -label "Skin 100% to Bone" -w 120 -command "ajOneHundredPercentSkin";
+                setParent ..;
+            setParent ..;
+        setParent ..;      
+    setParent ..;
+    
+setParent ..;
+
+///////////////////////////////////////////////////////
+//              PROJECT SPECIFIC STUFF
+/////////////////////////////////////////////////////// 
+
+frameLayout -label "PROJECT SPECIFIC STUFF" -borderStyle "etchedIn" -collapsable true -collapse true -w 300; 
+    frameLayout -label "Enders" -w 150;
+        columnLayout;
+    	    button -label "Reset Cam" -w 120 -command "string $cam[] = {\"persp\"}; string $selection[] = `ls -sl`; select -r podium_4 ; fitPanel -selected; setAttr ($cam[0] + \".translateX\") 11; setAttr($cam[0] + \".translateY\") 360; setAttr ($cam[0] + \".translateZ\") 230; setAttr ($cam[0] + \".rotateX\") 0; setAttr ($cam[0] + \".rotateY\") 0; setAttr ($cam[0] + \".rotateZ\") 0; select -r $selection";           	    
+    	    button -label "Reattach Asteroids" -w 120 -command "ajDupeAsteroids";
+    	    button -label "Reattach DreadNoughts" -w 120 -command "ajDupeDreadnaughts";
+    	    button -label "Reattach Formic Fighters" -w 120 -command "ajDupeFormic";
+    	    button -label "Remove GEO" -w 120 -command "ajRemoveGeo";
+    	    button -label "Query Obj Type" -w 120 -command "ajQueryObjType"; 
+        setParent ..;
+    setParent ..;  
+    
+setParent ..;
+///////////////////////////////////////////////////////
+//              TEST STUFF
+/////////////////////////////////////////////////////// 
+
+frameLayout -label "TEST STUFF" -borderStyle "etchedIn" -collapsable true -collapse true -w 300;  //FOURTH Frame Layout
+    rowLayout -numberOfColumns 2 -columnWidth3 80 75 150 -adjustableColumn true;    //FOURTH Row layout               
+    
+/////////////////////////
+//Primitives
+        frameLayout -label "Create Primitives" -w 150;
+            rowLayout -numberOfColumns 3;
+                columnLayout;
+            	    symbolButton -image "polyCube.png" -command "polyCube -ch on -o on -w 10 -h 10 -d 10 -cuv 4; move -r 0 5 0 ;";
+            	    symbolButton -image "polySphere.png" -command "polySphere";            	    
+            	setParent ..;
+            	columnLayout;
+                    symbolButton -image "polyCone.png" -command "polyCone";
+            	    symbolButton -image "polyPlane.png" -command "polyPlane";            	                    
+            	setParent ..;
+            	columnLayout;
+            	    symbolButton -image "polyHelix.png" -command "polyHelix -ch on -o on -c 2 -h 20 -w 10 -r 1 -cuv 3; move 0 10 0";
+            	    symbolButton -image "polyCylinder.png" -command "polyCylinder -ch on -o on -r 5 -h 15 -sc 1 -cuv 3; move 0 7.5 0";
+            	setParent ..;
+            setParent ..;
+        setParent ..;
+        
+/////////////////////////
+//Shapes
+        frameLayout -label "Shake" -w 150;
+            rowLayout -numberOfColumns 2 -columnWidth3 80 75 150 -adjustableColumn 2;
+                columnLayout;
+            	    button -label "Add Shake" -w 65 -command "ajAddShake";
+            	    button -label "Remove Shake" -w 65 -command "ajRemoveShake";
+            	    button -label "ReplaceObjects" -w 65 -command "ajReplaceObjects";
+                setParent ..;
+                
+                columnLayout;
+       	            button -label "Test XYZ" -w 65 -command "ajTestXYZ";
+       	            button -label "Dupes and shit" -w 65 -command "ajDuplicateAnim";
+       	            button -label "Test Detection" -w 65 -command "ajDetectAnim";
+                setParent ..;
+            setParent ..;
+        setParent ..; 
+    setParent ..;
+/////////////////////////
+//Baking
+        frameLayout -label "Baking Options" -w 150;
+            rowLayout -numberOfColumns 2 -columnWidth3 80 75 150 -adjustableColumn 2;
+                columnLayout;
+            	    button -label "Bake to Null (World)" -w 120 -command "ajBakeToNullInWorldSpace";
+                setParent ..;
+            setParent ..;
+        setParent ..;
+
+/////////////////////////
+//Modeling tests
+        frameLayout -label "Modeling Test stuff" -w 150;
+            rowLayout -numberOfColumns 2 -columnWidth3 80 75 150 -adjustableColumn 2;
+                columnLayout;
+                    string $ajNewNameInput = `textField -editable true -width 110`;
+            	    button -label "Extract Faces" -w 120 -command "ajExtractFaces($ajNewNameInput)";
+                setParent ..;
+            setParent ..;
+        setParent ..;
+setParent ..; 
+ 
+      
+///////////////////////////////////////////////////////
+//              GUI END
+/////////////////////////////////////////////////////// 
+
+    setParent ..;//Main Row layout Parent
+setParent ..; //Main Frame Layout Parent
+
+
+///////////////////////////////////////////////////////
+//            PROCS
+///////////////////////////////////////////////////////
+
+/////////////////////////////////
+//ANIMATION PROCS
+proc ajAnimatePieceGrow()
+{
+    int $i;
+    string $selection[] = `ls -sl`;
+    for ($i=0; $i<size($selection) - 1; $i=$i+1)
+    {
+        //End Pose Keyframe
+        float $currentTime = `currentTime -q`;
+        setKeyframe;
+        
+        // Starting Keyframe
+        currentTime ($currentTime - 5); 
+        setAttr ($selection[$i] + ".translate") -type "double3" 0 0 0;
+        setKeyframe;
+    
+        setAttr ($selection[$i] + ".rotateY") -13;
+        setAttr ($selection[$i] + ".scale") -type "double3" 0 0 0;  
+        
+        //Mid Keyframe
+        currentTime ($currentTime - 2);
+        setKeyframe;
+        setAttr ($selection[$i] + ".scale") -type "double3" .9 .9 .9;
+        
+        //Setup for next Key
+        currentTime ($currentTime - 5);
+    }
+    }
+    
+    proc ajSetKeyOnTR()
+    {
+        int $i;
+        select -hi;
+        string $selection[] = `ls -sl`;
+        string $attr[] = {".tx",".ty",".tz",".rx",".ry",".rz"};
+        for ($i=0; $i<size($selection); $i=$i+1)
+        {
+            for ($n=0;$n<size($attr);$n=$n+1)
+            {
+                setKeyframe ($selection[$i] + $attr[$n]);
+            }
+        }
+}
+
+proc ajDetectAnim()
+{
+    string $yourMom[] = `ls -sl`;
+    if (size($yourMom)<1)
+    {
+        ajNothingSelected;
+    }
+    for ($i=0; $i<size($yourMom); ++$i)
+    {
+        print($yourMom[$i] + "\n");        
+    }
+}
+
+proc ajReplaceObjects()
+{
+    int $i;
+    int $r;
+    int $rando;
+    string $ajReplaceObj[] = {"Asteroid_0", "Asteroid_"};
+    string $selection[] = `ls -sl`;
+    for ($i=0; $i<size($selection); $i=$i+1)
+    {
+        print ($selection[$i] + "\n");
+        int $rando = rand (1, 15);
+        if ($rando<10)
+        {
+            print ("Replacing " + $selection[$i] + " with " + $ajReplaceObj[0] + $rando + "\n");
+            select -r $selection[$i] ($ajReplaceObj[0] + $rando);
+            ReplaceObjects;            
+        }
+        else 
+        {
+            print ("Replacing " + $selection[$i] + " with " + $ajReplaceObj[1] + $rando + "\n");
+            select -r $selection[$i] ($ajReplaceObj[1] + $rando);
+            ReplaceObjects;  
+        }
+    }
+    
+}
+proc ajTestXYZ()
+{    
+    int $ajTX = `checkBox -q -value ajTXCheck`; 
+    int $ajTY = `checkBox -q -value ajTYCheck`; 
+    int $ajTZ = `checkBox -q -value ajTZCheck`; 
+    int $ajRX = `checkBox -q -value ajRXCheck`; 
+    int $ajRY = `checkBox -q -value ajRYCheck`;
+    int $ajRZ = `checkBox -q -value ajRZCheck`; 
+    int $ajTRArray[] = {$ajTX, $ajTY, $ajTZ, $ajRX, $ajRY, $ajRZ} ;  
+    string $XYZLabel[] = {"TX is ", "TY is ", "TZ is ", "RX is ", "RY is ", "RZ is "};
+    string $onOff[] = {"off", "on"};
+    int $i;
+    for ($i=0; $i<size($ajTRArray); $i=$i+1)
+   {
+       print ($XYZLabel[$i] + $onOff[$ajTRArray[$i]] + "\n");
+   }
+}
+
+proc ajAddShake()
+{
+    int $n;
+    int $i;
+    string $attributes[] = {"shaker", "frequency", "amplitude", "seed"};
+    string $selection[] = `ls -sl`;
+    for ($n=0; $n<size($selection); $n=$n+1)
+    {
+        for ($i=0; $i<size($attributes); $i=$i+1)
+        {
+           if (`objExists ($selection[$n] + "." + $attributes[$i])`)
+            {
+                print (($selection[$n] + "." + $attributes[$i]) + " is already there! Moving on.");
+            }
+            else
+            {
+                addAttr -ln $attributes[$i] -at double  -min 0 -max 10 -dv 0 $selection[$n];
+                setAttr -e-keyable true ($selection[$n] + "." + $attributes[$i]);
+                print ("Added " + $attributes[$i] + " to " + $selection[$n] + ". \n");
+            }          
+        }
+        if (`objExists ($selection[$n] + "_shakeExpression")`)
+        {
+            print (($selection[$n] + "_shakeExpression") + " expression exists. \n");
+        }
+        else
+        {
+            expression -name ($selection[$n] + "_shakeExpression") -s ("float $mult = " + $selection[$n] + ".shaker;\nfloat $amp = " + $selection[$n] + ".amplitude; \nfloat $freq = " + $selection[$n] + ".frequency; \nfloat $seed = 2; \nvector $noise = <<(frame * ($freq * .1) + $seed), (frame * ($freq * .1) + $seed), (frame * ($freq * .1) + $seed)>>; \nvector $shake = (dnoise($noise) * $amp * .05) * $mult; \n" + $selection[$n] + ".rotateX = $shake.x; \n" + $selection[$n] + ".rotateY = $shake.y; \n" + $selection[$n] + ".rotateZ = $shake.z;");
+            print (($selection[$n] + "_shakeExpression") + " expression created! \n");
+        }   
+    }    
+}
+
+proc ajRemoveShake()
+{
+    int $i;
+    string $attributes[] = {"shaker", "frequency", "amplitude", "seed"};
+    string $selection[] = `ls -sl`;
+    for ($n=0; $n<size($selection); $n=$n+1)
+    {
+        for ($i=0; $i<size($attributes); $i=$i+1)
+        {
+           if (!`objExists ($selection[$n] + "." + $attributes[$i])`)
+            {
+                print (($selection[$n] + "." + $attributes[$i]) + " is already gone! Moving on. \n");
+            }
+            else
+            {
+                deleteAttr ($selection[$n] + "." + $attributes[$i]);
+                print ("Removed " + $attributes[$i] + " from " + $selection[$n] + ". \n");
+            }      
+        }
+        if (!`objExists ($selection[$n] + "_shakeExpression")`)
+        {
+            print (($selection[$n] + "_shakeExpression") + " is already gone. \n");
+        }
+        else
+        {
+            delete ($selection[$n] + "_shakeExpression");
+            print (($selection[$n] + "_shakeExpression") + " expression deleted! \n");
+        }    
+    }
+}
+
+proc ajDuplicateAnim()
+{
+    int $rate = `intField -q -value animInputInt`;
+    string $selected[] = `ls -sl`;
+    int $i;
+    for ($i=0; $i<size($selected); $i=$i+1)
+    {
+        select -r $selected[$i];
+        select -hi;
+        select -r $selected[$i];
+        duplicate -rr -un;
+        select -hi;
+        select -cl;
+    }
+}
+
+proc ajRandomizeAnim()
+{
+    int $ajAnimInput = `intField -q -value animInputInt`;
+    if ($ajAnimInput == 0)
+        ajInputError;
+    int $i;
+    string $selection[] = `ls -sl`;
+    for ($i=0; $i<size($selection); $i=$i+1)
+    {
+        select -cl;
+        select $selection[$i];
+        float $rando = rand (($ajAnimInput * -1), $ajAnimInput);
+        keyframe -e -iub true -r -o over -tc $rando  ;
+    }
+    select -cl;
+    select -r $selection;
+
+}
+
+proc ajRandomizeScale()
+{
+    int $ajTX = `checkBox -q -value ajTXCheck`; 
+    int $ajTY = `checkBox -q -value ajTYCheck`; 
+    int $ajTZ = `checkBox -q -value ajTZCheck`; 
+    int $ajRX = `checkBox -q -value ajRXCheck`; 
+    int $ajRY = `checkBox -q -value ajRYCheck`;
+    int $ajRZ = `checkBox -q -value ajRZCheck`;
+    int $ajAnimInput = `intField -q -value animInputInt`;
+    if ($ajAnimInput == 0)
+        ajInputError;
+    int $upperLimit = $ajAnimInput;
+    int $lowerLimit = ($ajAnimInput * -1);
+    int $i;
+    string $selection[] = `ls -sl`;
+    for ($i=0; $i<size($selection); $i=$i+1)
+    {
+        select -cl;
+        select $selection[$i];
+        float $randoRX = rand (($lowerLimit * $ajRX), ($upperLimit * $ajRX));
+        float $randoRY = rand (($lowerLimit * $ajRY), ($upperLimit * $ajRY));
+        float $randoRZ = rand (($lowerLimit * $ajRZ), ($upperLimit * $ajRZ));
+        float $randoTX = rand (($lowerLimit * $ajTX), ($upperLimit * $ajTX));
+        float $randoTY = rand (($lowerLimit * $ajTY), ($upperLimit * $ajTY));
+        float $randoTZ = rand (($lowerLimit * $ajTZ), ($upperLimit * $ajTZ));
+        rotate -r -os $randoRX $randoRY $randoRZ ;
+        move -r $randoTX $randoTY $randoTZ;
+    }
+    select -cl;
+    select -r $selection;
+
+}
+
+proc ajRandomizePlacement()
+{
+    int $ajTX = `checkBox -q -value ajTXCheck`; 
+    int $ajTY = `checkBox -q -value ajTYCheck`; 
+    int $ajTZ = `checkBox -q -value ajTZCheck`; 
+    int $ajRX = `checkBox -q -value ajRXCheck`; 
+    int $ajRY = `checkBox -q -value ajRYCheck`;
+    int $ajRZ = `checkBox -q -value ajRZCheck`;
+    int $ajAnimInput = `intField -q -value animInputInt`;
+    if ($ajAnimInput == 0)
+        ajInputError;
+    int $upperLimit = $ajAnimInput;
+    int $lowerLimit = ($ajAnimInput * -1);
+    int $i;
+    string $selection[] = `ls -sl`;
+    for ($i=0; $i<size($selection); $i=$i+1)
+    {
+        select -cl;
+        select $selection[$i];
+        float $randoRX = rand (($lowerLimit * $ajRX), ($upperLimit * $ajRX));
+        float $randoRY = rand (($lowerLimit * $ajRY), ($upperLimit * $ajRY));
+        float $randoRZ = rand (($lowerLimit * $ajRZ), ($upperLimit * $ajRZ));
+        float $randoTX = rand (($lowerLimit * $ajTX), ($upperLimit * $ajTX));
+        float $randoTY = rand (($lowerLimit * $ajTY), ($upperLimit * $ajTY));
+        float $randoTZ = rand (($lowerLimit * $ajTZ), ($upperLimit * $ajTZ));
+        rotate -r -os $randoRX $randoRY $randoRZ ;
+        move -r $randoTX $randoTY $randoTZ;
+    }
+    select -cl;
+    select -r $selection;
+
+}
+
+proc ajParentConstraint()
+{
+    int $r;
+    int $i;
+    string $replaceWith[] = `ls -selection -tail 1`;
+    select -d $replaceWith[$r];
+    string $selection[] = `ls -sl`;
+    for ($i=0; $i<size($selection); $i=$i+1)
+    {
+        parentConstraint -mo $replaceWith[$r] $selection[$i];
+    }
+}
+
+///////////////////////////////////////////////////////
+//            Curve CTRLS
+///////////////////////////////////////////////////////
+
+/////////////////////////////////
+//Auto Tangent
+proc autoTangent()
+{
+    string $selected[] = `ls -sl`;
+    string $attr[] = {".tx",".ty",".tz",".rx",".ry",".rz"};
+    int $i;
+    int $n;
+    for ($i=0; $i<size($selected); $i=$i+1)
+        {
+            select -add $selected[$i];
+            for ($n=0;$n<size($attr);$n=$n+1)
+            {
+                if (objExists ($selected[$i] + $attr[$n]))
+                {
+                    keyTangent -itt auto -ott auto ($selected[$i] + $attr[$n]);
+                } 
+                else
+                {
+                    print (($selected[$i] + $attr[$n]) + " doesnt exist!\n");
+                }           
+            }            
+        }
+}
+
+//Linear Tangent
+proc linearTangent()
+{
+    float $currentTime = `currentTime -q`;
+    string $selected[] = `ls -sl`;
+    int $i;
+    for ($i=0; $i<size($selected); $i=$i+1)
+        {
+            select -add $selected[$i];
+            keyTangent -itt linear -time $currentTime -ott linear ($selected[$i] + ".rx") ($selected[$i] + ".ry") ($selected[$i] + ".rz") ($selected[$i] + ".tx") ($selected[$i] + ".ty") ($selected[$i] + ".tz");
+        }
+}
+
+//Stepped Tangent
+proc steppedTangent()
+{
+    string $selected[] = `ls -sl`;
+    int $i;
+    for ($i=0; $i<size($selected); $i=$i+1)
+        {
+            select -add $selected[$i];
+            keyTangent -itt step -ott step ($selected[$i] + ".rx") ($selected[$i] + ".ry") ($selected[$i] + ".rz") ($selected[$i] + ".tx") ($selected[$i] + ".ty") ($selected[$i] + ".tz");
+        }
+}
+/////////////////////////////////
+//Euler Filter to skeleton
+proc eulerFilter()
+{   
+    string $selected[] = `ls -sl`;
+    int $i;
+    for ($i=0; $i<size($selected); $i=$i+1)
+        {
+            select -add $selected[$i];
+            filterCurve ($selected[$i] + ".rx") ($selected[$i] + ".ry") ($selected[$i] + ".rz") ($selected[$i] + ".tx") ($selected[$i] + ".ty") ($selected[$i] + ".tz");
+        }
+}
+
+/////////////////////////////////
+//Cycle anim
+proc cycleCurves()
+{   
+    setInfinity -pri "cycle" -poi "cycle" ;
+    animCurveEditor -edit -displayInfinities true graphEditor1GraphEd ;
+}
+
+///////////////////////////////////////////////////////
+//Copy and Paste
+ 
+proc copyKeys()
+{
+    timeSliderCopyKey;
+}
+
+proc pasteKeys()
+{
+    timeSliderPasteKey false;
+}
+
+
+///////////////////////////////////////////////////////
+//                Windows
+///////////////////////////////////////////////////////
+proc showGraphEditor()
+{
+    if (`window -q -ex graphEditor1Window`)
+    deleteUI graphEditor1Window;
+    else
+       tearOffPanel "Graph Editor" "graphEditor" true; 
+}
+
+proc showNamespaceEditor()
+{
+    NamespaceEditor;
+    namespaceEditor;
+}
+
+////////////////////////////////////////////////////////
+//                   EXPORT PROCS
+////////////////////////////////////////////////////////
+
+proc ajSelectAnimationJoints()
+{
+    select -cl;
+    for	($joint in `ls -type joint`)
+    {
+        for	($attr in `listAttr -k $joint`)
+        {
+            float $keys[] = `keyframe -q -timeChange ($joint + "." + $attr)`;
+            if (`size $keys`>0)select -add $joint;
+        }
+    }
+}
+
+proc ajSelectJoints()
+{
+    string $selected[] = `ls -type joint`;
+    select -r $selected;
+}
+
+proc ajBakeJoints()
+{   float $startTime=`playbackOptions -q -min`;
+    float $endTime=`playbackOptions -q -max`;
+    select -r `ls -type joint`;
+    bakeResults -simulation true -t ($startTime+":"+$endTime) -sampleBy 1 -disableImplicitControl true -preserveOutsideKeys true -sparseAnimCurveBake false -removeBakedAttributeFromLayer false -bakeOnOverrideLayer false -minimizeRotation true -controlPoints false -shape true;
+}
+
+proc ajBakeSelected()
+{   float $startTime=`playbackOptions -q -min`;
+    float $endTime=`playbackOptions -q -max`;
+    bakeResults -simulation true -t ($startTime+":"+$endTime) -sampleBy 1 -disableImplicitControl true -preserveOutsideKeys true -sparseAnimCurveBake false -removeBakedAttributeFromLayer false -bakeOnOverrideLayer false -minimizeRotation true -controlPoints false -shape true;
+}
+
+proc ajBakeToNullInWorldSpace()
+{
+    int $i;
+    string $selection[] = `ls -o -sl`;
+    for ($i=0; $i<size($selection); $i=$i+1)
+    {
+        spaceLocator -n ($selection[$i] + "_tempLocToDie");
+        parentConstraint -weight 1 $selection[$i] ($selection[$i] + "_tempLocToDie");
+    }
+    
+    select -cl;
+    for ($i=0; $i<size($selection); $i=$i+1)
+    {
+        select -add ($selection[$i] + "_tempLocToDie");
+    }
+    
+    float $startTime=`playbackOptions -q -min`;
+    float $endTime=`playbackOptions -q -max`;
+    bakeResults -simulation true -t ($startTime+":"+$endTime) -sampleBy 1 -disableImplicitControl true -preserveOutsideKeys true -sparseAnimCurveBake false -removeBakedAttributeFromLayer false -bakeOnOverrideLayer false -minimizeRotation true -controlPoints false -shape true;
+    
+    for ($i=0; $i<size($selection);$i=$i+1)
+        {
+            parent $selection[$i] ($selection[$i] + "_tempLocToDie");
+        }
+    print ("Done!");
+}
+
+////////////////////////////////////////////////////////
+//                   RIGGING PROCS
+////////////////////////////////////////////////////////
+proc ajOneHundredPercentSkin()
+{
+    int $i;
+    string $selection[] = `ls -sl`;
+    string $constraintJoint[] = `ls -selection -tail 1`;
+    
+    for ($i=0; $i<size($selection) - 1; $i=$i+1)
+    {
+        select -r $selection[$i];
+        getVerts;
+        string $allVerts[] = `ls -sl -fl`;
+        int $vertCount = `size($allVerts)`;
+        print ("Number of Verts on " + $selection[$i] + ": " + $vertCount + "\n");
+        
+        skinPercent -tv $constraintJoint[0] 1 skinCluster3 ($selection[$i] + ".vtx[0:" + $vertCount + "]");
+        print ("Sweet. " + $selection[$i] + "is now fully skinned to " + $constraintJoint[0] + ". \n");
+    }
+}
+
+proc ajLockAttributes()
+{
+    string $sel[] = `ls -long -sl`;
+
+    for($eachObj in $sel)
+    {
+        string $ud[] = `listAttr -ud $eachObj`;
+        setAttr -l on ($eachObj + ".tx");
+        setAttr -l on ($eachObj + ".ty");
+        setAttr -l on ($eachObj + ".tz");
+        setAttr -l on ($eachObj + ".rx");
+        setAttr -l on ($eachObj + ".ry");
+        setAttr -l on ($eachObj + ".rz");
+        setAttr -l on ($eachObj + ".sx");
+        setAttr -l on ($eachObj + ".sy");
+        setAttr -l on ($eachObj + ".sz");
+        setAttr -l on ($eachObj + ".v");
+        for($each in $ud)
+            {
+                setAttr -k on ($eachObj + "." + $each);
+                setAttr -l off ($eachObj + "." + $each);
+            }
+
+    }
+}
+
+proc ajUnlockAttributes()
+{
+    string $sel[] = `ls -long -sl`;
+
+    for($eachObj in $sel)
+    {
+        string $ud[] = `listAttr -ud $eachObj`;
+        setAttr -k on ($eachObj + ".tx");
+        setAttr -k on ($eachObj + ".ty");
+        setAttr -k on ($eachObj + ".tz");
+        setAttr -k on ($eachObj + ".rx");
+        setAttr -k on ($eachObj + ".ry");
+        setAttr -k on ($eachObj + ".rz");
+        setAttr -k on ($eachObj + ".sx");
+        setAttr -k on ($eachObj + ".sy");
+        setAttr -k on ($eachObj + ".sz");
+        setAttr -k on ($eachObj + ".v");
+        setAttr -l off ($eachObj + ".tx");
+        setAttr -l off ($eachObj + ".ty");
+        setAttr -l off ($eachObj + ".tz");
+        setAttr -l off ($eachObj + ".rx");
+        setAttr -l off ($eachObj + ".ry");
+        setAttr -l off ($eachObj + ".rz");
+        setAttr -l off ($eachObj + ".sx");
+        setAttr -l off ($eachObj + ".sy");
+        setAttr -l off ($eachObj + ".sz");
+        setAttr -l off ($eachObj + ".v");
+        for($each in $ud)
+            {
+                setAttr -k on ($eachObj + "." + $each);
+                setAttr -l off ($eachObj + "." + $each);
+            }
+
+    }
+}
+
+proc ajResetPivot()
+{
+	string $sel[] = `ls -sl -l -transforms`;
+	int $count = 1;
+	for ($obj in $sel)
+	{
+		string $shortName = `match "[^|]*$" $obj`;
+		vector $localPivot = `xform -q -rp $obj`;
+		if ($localPivot != <<0.0, 0.0, 0.0>>)
+		{
+			print("resetPivot (" + $count + "): \"" + $shortName + "\" has an offset of (" + $localPivot.x + ") (" + $localPivot.y + ") (" + $localPivot.z + ")\n");
+			
+			//cut potential translation keys and take result for animation-check
+			int $animCheck = `cutKey -at "tx" -at "ty" -at "tz" $obj`;
+			
+			// check if the object has children
+			string $children[] = `listRelatives -f -c -type "transform" $obj`;
+			if (`size($children)`) // and parent them to the world
+				$children = `parent -w $children`;
+			
+			// parent to world if not already
+			string $parent = getArrayItem0(`listRelatives -p -f $obj`);
+			int $outlinerPosition;
+			if ($parent != "")
+			{
+				$outlinerPosition = reorderQ($obj);
+				$obj = getArrayItem0(`parent -w $obj`);
+			}
+
+			// get real world position
+			vector $worldPos = `xform -q -ws -rp $obj`;
+			move -rpr 0 0 0 $obj;
+			makeIdentity -apply true -t 1 -r 0 -s 0 $obj;
+			xform -t ($worldPos.x) ($worldPos.y) ($worldPos.z) $obj;
+			if ($parent != "") // reparent obj
+			{
+				$obj = getArrayItem0(`parent $obj $parent`);
+				$obj = `rename $obj $shortName`;
+				reorder -front $obj;
+				reorder -relative $outlinerPosition $obj;
+			}
+
+			// put the children back under the object
+			if (`size($children)`)
+			{
+				for ($child in $children)
+				{
+					// reparent this child
+ 					$child = getArrayItem0(`parent $child $obj`);
+					vector $curPos =    `getAttr ($child + ".t")`;
+
+					relocateTransAnim($curPos, $child);
+				}
+			}
+
+			if ($animCheck)
+			{
+				vector $curPos =    `getAttr ($obj + ".t")`;
+				// reinsert translation curve as it has been taken
+				pasteKey $obj;
+				
+				relocateTransAnim($curPos, $obj);
+			}
+			// sometimes there is a very tiny restvalue so:
+			// forcing local pivot to 0 0 0
+			xform -rp 0 0 0 $obj;
+			xform -sp 0 0 0 $obj;
+
+			// final test
+			$localPivot = `xform -q -rp $obj`;
+			if ($localPivot == <<0,0,0>>)
+				print ("resetPivot (" + $count++ + "): \"" + $shortName + "\" fixet! No offset anymore!\n");
+			else
+				warning ("\"" + $shortName + " has still an offset!!");
+		}
+		else
+			print ("resetPivot (" + $count++ + "): pivot of "+$shortName+" not dirty! Skipped!\n");
+	}
+	select -r $sel;
+}
+
+proc ajListTR()
+{
+    int $i;
+    int $tr;
+    string $selection[] = `ls -sl`;
+    string $ajTR[] = {".tx",".ty",".tz",".rx",".ry",".rz"};
+    
+    print ("Current position and rotation! \n");
+    for ($tr=0; $tr<(size($ajTR)); $tr++)
+    {
+        float $tempValue = `getAttr ($selection[$i] + $ajTR[$tr])`;
+        print (($selection[$i] + $ajTR[$tr]) + ": " + $tempValue + "\n");
+    }
+    
+}
+
+////////////////////////////////////////////////////////
+//                  ENDERS PROCS
+////////////////////////////////////////////////////////
+
+proc ajDupeAsteroids()
+{
+    select -r Asteroid_05_0_loc_anim Asteroid_05_1_loc_static Asteroid_13_2_loc_static Asteroid_03_3_loc_static Asteroid_02_4_loc_static Asteroid_07_5_loc_static Asteroid_07_6_loc_static Asteroid_13_7_loc_static Asteroid_13_8_loc_static Asteroid_11_9_loc_static Asteroid_14_10_loc_static Asteroid_08_11_loc_static Asteroid_08_12_loc_static Asteroid_07_13_loc_static Asteroid_03_14_loc_anim Asteroid_03_15_loc_anim Asteroid_03_16_loc_anim Asteroid_01_17_loc_static Asteroid_05_18_loc_static Asteroid_05_19_loc_static Asteroid_12_20_loc_static Asteroid_07_21_loc_static Asteroid_03_22_loc_static Asteroid_05_23_loc_static Asteroid_03_24_loc_anim Asteroid_03_25_loc_static Asteroid_09_26_loc_static Asteroid_13_27_loc_static Asteroid_03_28_loc_static Asteroid_14_29_loc_static Asteroid_08_30_loc_static Asteroid_05_31_loc_static Asteroid_12_32_loc_static Asteroid_03_33_loc_static Asteroid_03_34_loc_static Asteroid_03_35_loc_static Asteroid_03_36_loc_anim Asteroid_03_37_loc_static Asteroid_05_38_loc_static Asteroid_05_39_loc_static Asteroid_05_40_loc_static Asteroid_12_41_loc_static Asteroid_12_42_loc_static Asteroid_03_43_loc_static Asteroid_03_44_loc_anim Asteroid_03_45_loc_static Asteroid_03_46_loc_anim Asteroid_03_47_loc_anim Asteroid_03_48_loc_anim Asteroid_03_49_loc_anim Asteroid_14_50_loc_static Asteroid_03_51_loc_static Asteroid_03_52_loc_static Asteroid_03_Moon_loc;
+    int $i;
+    int $n;
+    int $s;
+    string $selection[] = `ls -sl`;
+    string $attr[] = {".tx",".ty",".tz",".rx",".ry",".rz"};
+    string $size[] = {".scaleX",".scaleY",".scaleZ",".scaleX",".scaleY",".scaleZ"};
+    for ($i=0;$i<size($selection);$i=$i+1)
+    {
+        select -r $selection[$i];
+        string $dupeAsteroid = `substring $selection[$i] 1 11`;
+        select -r $dupeAsteroid;
+        duplicate -rr -un $dupeAsteroid;
+        string $newAsteroid[] = `ls -sl`;
+        parent $newAsteroid[0] $selection[$i];
+        for ($n=0;$n<size($attr);$n=$n+1)
+        {
+            setAttr ($newAsteroid[0] + $attr[$n]) 0;
+            setAttr ($newAsteroid[0] + $size[$n]) 1;
+        }    
+    }
+}
+
+proc ajDupeDreadnaughts()
+{
+    select -r dreadnought_01 dreadnought_02 dreadnought_03 ;
+    int $i;
+    int $n;
+    int $s;
+    string $selection[] = `ls -sl`;
+    string $attr[] = {".tx",".ty",".tz",".rx",".ry",".rz"};
+    string $size[] = {".scaleX",".scaleY",".scaleZ",".scaleX",".scaleY",".scaleZ"};
+    for ($i=0;$i<size($selection);$i=$i+1)
+    {
+        select -r "dreadnought";
+        duplicate -rr -un;
+        string $newDreadNaught[] = `ls -sl`;
+        parent $newDreadNaught[0] $selection[$i];
+        for ($n=0;$n<size($attr);$n=$n+1)
+        {
+            setAttr ($newDreadNaught[0] + $attr[$n]) 0;
+            setAttr ($newDreadNaught[0] + $size[$n]) 1;
+        } 
+        setAttr ($newDreadNaught[0] + ".visibility") 1;   
+    }
+}
+
+proc ajDupeFormic()
+{
+    select -r null_parent|formicfighter_null formicFighter_0 formicFighter_1 formicFighter_2 formicFighter_3 formicFighter_4 formicFighter_5 formicFighter_6 formicFighter_7 formicFighter_8 formicFighter_9 formicFighter_10 formicFighter_11 formicFighter_12 formicFighter_13 formicFighter_14 formicFighter_15 formicFighter_16 formicFighter_17 formicFighter_18 formicFighter_19 formicFighter_20 formicFighter_21 formicFighter_22 formicFighter_23 formicFighter_24 formicFighter_25 formicFighter_26 formicFighter_27 formicFighter_28 formicFighter_29 formicFighter_30 formicFighter_31 formicFighter_32 formicFighter_33 formicFighter_34 formicFighter_35 formicFighter_36 formicFighter_37 formicFighter_38 formicFighter_39 formicFighter_40 formicFighter_41 formicFighter_42 formicFighter_43 formicFighter_44 formicFighter_45 formicFighter_46 formicFighter_47 formicFighter_48 formicFighter_49 formicFighter_50 formicFighter_51 formicFighter_52 formicFighter_53 formicFighter_54 formicFighter_55 formicFighter_56 formicFighter_57 formicFighter_58 formicFighter_59 formicFighter_60 formicFighter_61 formicFighter_62 formicFighter_63 formicFighter_64 formicFighter_65 formicFighter_66 formicFighter_67 formicFighter_68 formicFighter_69 formicFighter_70 formicFighter_71 formicFighter_72 formicFighter_73 formicFighter_74 formicFighter_75 formicFighter_76 formicFighter_77 formicFighter_78 formicFighter_79 formicFighter_80 formicFighter_81 formicFighter_82 formicFighter_83 formicFighter_84 formicFighter_85 formicFighter_86 formicFighter_87 formicFighter_88 formicFighter_89 formicFighter_90 formicFighter_91 formicFighter_92 formicFighter_93 formicFighter_94 formicFighter_95 formicFighter_96 formicFighter_97 formicFighter_98 formicFighter_99 formicFighter_100 formicFighter_101 formicFighter_102 formicFighter_103 formicFighter_104 formicFighter_105 formicFighter_106 formicFighter_107 formicFighter_108 formicFighter_109 formicFighter_110 formicFighter_111 formicFighter_112 formicFighter_113 formicFighter_114 formicFighter_115 formicFighter_116 formicFighter_117 formicFighter_118 formicFighter_119 formicFighter_120 formicFighter_121 formicFighter_122 formicFighter_123 formicFighter_124 formicFighter_125 formicFighter_126 formicFighter_127 formicFighter_128 formicFighter_129 formicFighter_130 formicFighter_131 formicFighter_132 formicFighter_133 formicFighter_134 formicFighter_135 formicFighter_136 formicFighter_137 formicFighter_138 formicFighter_139 formicFighter_140 formicFighter_141 formicFighter_142 formicFighter_143 formicFighter_144 formicFighter_145 formicFighter_146 formicFighter_147 formicFighter_148 formicFighter_149 formicFighter_150 formicFighter_151 formicFighter_152 formicFighter_153 formicFighter_154 formicFighter_155 formicFighter_156 formicFighter_157 formicFighter_158 formicFighter_159 formicFighter_160 formicFighter_161 formicFighter_162 formicFighter_163 formicFighter_164 formicFighter_165 formicFighter_166 formicFighter_167 formicFighter_168 formicFighter_169 formicFighter_170 formicFighter_171 formicFighter_172 formicFighter_173 formicFighter_174 formicFighter_175 formicFighter_176 formicFighter_177 formicFighter_178 formicFighter_179 formicFighter_180 formicFighter_181 formicFighter_182 formicFighter_183 formicFighter_184 formicFighter_185 formicFighter_186 formicFighter_187 formicFighter_188 formicFighter_189 formicFighter_190 formicFighter_191 formicFighter_192 formicFighter_193 formicFighter_194 formicFighter_195 formicFighter_196 formicFighter_197 formicFighter_198 formicFighter_199 formicFighter_200 formicFighter_201 formicFighter_202 formicFighter_203 formicFighter_204 formicFighter_205 formicFighter_206 formicFighter_207 formicFighter_208 formicFighter_209 formicFighter_210 formicFighter_211 formicFighter_212 formicFighter_213 formicFighter_214 formicFighter_215 formicFighter_216 formicFighter_217 formicFighter_218 formicFighter_219 formicFighter_220 formicFighter_221 formicFighter_222 formicFighter_223 formicFighter_224 formicFighter_225 formicFighter_226 formicFighter_227 formicFighter_228 formicFighter_229 formicFighter_230 formicFighter_231 formicFighter_232 formicFighter_233 formicFighter_234 formicFighter_235 formicFighter_236 formicFighter_237 formicFighter_238 formicFighter_239 formicFighter_240 formicFighter_241 formicFighter_242 formicFighter_243 formicFighter_244 formicFighter_245 formicFighter_246 formicFighter_247 formicFighter_248 formicFighter_249 formicFighter_250 formicFighter_251 formicFighter_252 formicFighter_253 formicFighter_254 formicFighter_255 formicFighter_256 formicFighter_257 formicFighter_258 formicFighter_259 formicFighter_260 formicFighter_261 formicFighter_262 formicFighter_263 formicFighter_264 formicFighter_265 formicFighter_266 formicFighter_267 formicFighter_268 formicFighter_269 formicFighter_270 formicFighter_271 formicFighter_272 formicFighter_273 formicFighter_274 formicFighter_275 formicFighter_276 formicFighter_277 formicFighter_278 formicFighter_279 formicFighter_280 formicFighter_281 formicFighter_282 formicFighter_283;
+    pickWalk -d down;
+    int $i;
+    int $n;
+    int $s;
+    string $selection[] = `ls -sl`;
+    string $attr[] = {".tx",".ty",".tz",".rx",".ry",".rz"};
+    string $size[] = {".scaleX",".scaleY",".scaleZ",".scaleX",".scaleY",".scaleZ"};
+    for ($i=0;$i<size($selection);$i=$i+1)
+    {
+        select -r "formicfighter_LOD0";
+        duplicate -rr -un;
+        string $newFormicFighter[] = `ls -sl`;
+        parent $newFormicFighter[0] $selection[$i];
+        for ($n=0;$n<size($attr);$n=$n+1)
+        {
+            setAttr ($newFormicFighter[0] + $attr[$n]) 0;
+            setAttr ($newFormicFighter[0] + $size[$n]) 1;
+        } 
+        setAttr ($newFormicFighter[0] + ".visibility") 1;   
+    }
+}
+
+proc ajRemoveGeo()
+{
+    select -r Asteroid_05_0_loc_anim Asteroid_05_1_loc_static Asteroid_13_2_loc_static Asteroid_03_3_loc_static Asteroid_02_4_loc_static Asteroid_07_5_loc_static Asteroid_07_6_loc_static Asteroid_13_7_loc_static Asteroid_13_8_loc_static Asteroid_11_9_loc_static Asteroid_14_10_loc_static Asteroid_08_11_loc_static Asteroid_08_12_loc_static Asteroid_07_13_loc_static Asteroid_03_14_loc_anim Asteroid_03_15_loc_anim Asteroid_03_16_loc_anim Asteroid_01_17_loc_static Asteroid_05_18_loc_static Asteroid_05_19_loc_static Asteroid_12_20_loc_static Asteroid_07_21_loc_static Asteroid_03_22_loc_static Asteroid_05_23_loc_static Asteroid_03_24_loc_anim Asteroid_03_25_loc_static Asteroid_09_26_loc_static Asteroid_13_27_loc_static Asteroid_03_28_loc_static Asteroid_14_29_loc_static Asteroid_08_30_loc_static Asteroid_05_31_loc_static Asteroid_12_32_loc_static Asteroid_03_33_loc_static Asteroid_03_34_loc_static Asteroid_03_35_loc_static Asteroid_03_36_loc_anim Asteroid_03_37_loc_static Asteroid_05_38_loc_static Asteroid_05_39_loc_static Asteroid_05_40_loc_static Asteroid_12_41_loc_static Asteroid_12_42_loc_static Asteroid_03_43_loc_static Asteroid_03_44_loc_anim Asteroid_03_45_loc_static Asteroid_03_46_loc_anim Asteroid_03_47_loc_anim Asteroid_03_48_loc_anim Asteroid_03_49_loc_anim Asteroid_14_50_loc_static Asteroid_03_51_loc_static Asteroid_03_52_loc_static Asteroid_03_Moon_loc;
+    select -add null_parent|formicfighter_null formicFighter_0|formicfighter_null formicFighter_1|formicfighter_null formicFighter_2|formicfighter_null formicFighter_3|formicfighter_null formicFighter_4|formicfighter_null formicFighter_5|formicfighter_null formicFighter_6|formicfighter_null formicFighter_7|formicfighter_null formicFighter_8|formicfighter_null formicFighter_9|formicfighter_null formicFighter_10|formicfighter_null formicFighter_11|formicfighter_null formicFighter_12|formicfighter_null formicFighter_13|formicfighter_null formicFighter_14|formicfighter_null formicFighter_15|formicfighter_null formicFighter_16|formicfighter_null formicFighter_17|formicfighter_null formicFighter_18|formicfighter_null formicFighter_19|formicfighter_null formicFighter_20|formicfighter_null formicFighter_21|formicfighter_null formicFighter_22|formicfighter_null formicFighter_23|formicfighter_null formicFighter_24|formicfighter_null formicFighter_25|formicfighter_null formicFighter_26|formicfighter_null formicFighter_27|formicfighter_null formicFighter_28|formicfighter_null formicFighter_29|formicfighter_null formicFighter_30|formicfighter_null formicFighter_31|formicfighter_null formicFighter_32|formicfighter_null formicFighter_33|formicfighter_null formicFighter_34|formicfighter_null formicFighter_35|formicfighter_null formicFighter_36|formicfighter_null formicFighter_37|formicfighter_null formicFighter_38|formicfighter_null formicFighter_39|formicfighter_null formicFighter_40|formicfighter_null formicFighter_41|formicfighter_null formicFighter_42|formicfighter_null formicFighter_43|formicfighter_null formicFighter_44|formicfighter_null formicFighter_45|formicfighter_null formicFighter_46|formicfighter_null formicFighter_47|formicfighter_null formicFighter_48|formicfighter_null formicFighter_49|formicfighter_null formicFighter_50|formicfighter_null formicFighter_51|formicfighter_null formicFighter_52|formicfighter_null formicFighter_53|formicfighter_null formicFighter_54|formicfighter_null formicFighter_55|formicfighter_null formicFighter_56|formicfighter_null formicFighter_57|formicfighter_null formicFighter_58|formicfighter_null formicFighter_59|formicfighter_null formicFighter_60|formicfighter_null formicFighter_61|formicfighter_null formicFighter_62|formicfighter_null formicFighter_63|formicfighter_null formicFighter_64|formicfighter_null formicFighter_65|formicfighter_null formicFighter_66|formicfighter_null formicFighter_67|formicfighter_null formicFighter_68|formicfighter_null formicFighter_69|formicfighter_null formicFighter_70|formicfighter_null formicFighter_71|formicfighter_null formicFighter_72|formicfighter_null formicFighter_73|formicfighter_null formicFighter_74|formicfighter_null formicFighter_75|formicfighter_null formicFighter_76|formicfighter_null formicFighter_77|formicfighter_null formicFighter_78|formicfighter_null formicFighter_79|formicfighter_null formicFighter_80|formicfighter_null formicFighter_81|formicfighter_null formicFighter_82|formicfighter_null formicFighter_83|formicfighter_null formicFighter_84|formicfighter_null formicFighter_85|formicfighter_null formicFighter_86|formicfighter_null formicFighter_87|formicfighter_null formicFighter_88|formicfighter_null formicFighter_89|formicfighter_null formicFighter_90|formicfighter_null formicFighter_91|formicfighter_null formicFighter_92|formicfighter_null formicFighter_93|formicfighter_null formicFighter_94|formicfighter_null formicFighter_95|formicfighter_null formicFighter_96|formicfighter_null formicFighter_97|formicfighter_null formicFighter_98|formicfighter_null formicFighter_99|formicfighter_null formicFighter_100|formicfighter_null formicFighter_101|formicfighter_null formicFighter_102|formicfighter_null formicFighter_103|formicfighter_null formicFighter_104|formicfighter_null formicFighter_105|formicfighter_null formicFighter_106|formicfighter_null formicFighter_107|formicfighter_null formicFighter_108|formicfighter_null formicFighter_109|formicfighter_null formicFighter_110|formicfighter_null formicFighter_111|formicfighter_null formicFighter_112|formicfighter_null formicFighter_113|formicfighter_null formicFighter_114|formicfighter_null formicFighter_115|formicfighter_null formicFighter_116|formicfighter_null formicFighter_117|formicfighter_null formicFighter_118|formicfighter_null formicFighter_119|formicfighter_null formicFighter_120|formicfighter_null formicFighter_121|formicfighter_null formicFighter_122|formicfighter_null formicFighter_123|formicfighter_null formicFighter_124|formicfighter_null formicFighter_125|formicfighter_null formicFighter_126|formicfighter_null formicFighter_127|formicfighter_null formicFighter_128|formicfighter_null formicFighter_129|formicfighter_null formicFighter_130|formicfighter_null formicFighter_131|formicfighter_null formicFighter_132|formicfighter_null formicFighter_133|formicfighter_null formicFighter_134|formicfighter_null formicFighter_135|formicfighter_null formicFighter_136|formicfighter_null formicFighter_137|formicfighter_null formicFighter_138|formicfighter_null formicFighter_139|formicfighter_null formicFighter_140|formicfighter_null formicFighter_141|formicfighter_null formicFighter_142|formicfighter_null formicFighter_143|formicfighter_null formicFighter_144|formicfighter_null formicFighter_145|formicfighter_null formicFighter_146|formicfighter_null formicFighter_147|formicfighter_null formicFighter_148|formicfighter_null formicFighter_149|formicfighter_null formicFighter_150|formicfighter_null formicFighter_151|formicfighter_null formicFighter_152|formicfighter_null formicFighter_153|formicfighter_null formicFighter_154|formicfighter_null formicFighter_155|formicfighter_null formicFighter_156|formicfighter_null formicFighter_157|formicfighter_null formicFighter_158|formicfighter_null formicFighter_159|formicfighter_null formicFighter_160|formicfighter_null formicFighter_161|formicfighter_null formicFighter_162|formicfighter_null formicFighter_163|formicfighter_null formicFighter_164|formicfighter_null formicFighter_165|formicfighter_null formicFighter_166|formicfighter_null formicFighter_167|formicfighter_null formicFighter_168|formicfighter_null formicFighter_169|formicfighter_null formicFighter_170|formicfighter_null formicFighter_171|formicfighter_null formicFighter_172|formicfighter_null formicFighter_173|formicfighter_null formicFighter_174|formicfighter_null formicFighter_175|formicfighter_null formicFighter_176|formicfighter_null formicFighter_177|formicfighter_null formicFighter_178|formicfighter_null formicFighter_179|formicfighter_null formicFighter_180|formicfighter_null formicFighter_181|formicfighter_null formicFighter_182|formicfighter_null formicFighter_183|formicfighter_null formicFighter_184|formicfighter_null formicFighter_185|formicfighter_null formicFighter_186|formicfighter_null formicFighter_187|formicfighter_null formicFighter_188|formicfighter_null formicFighter_189|formicfighter_null formicFighter_190|formicfighter_null formicFighter_191|formicfighter_null formicFighter_192|formicfighter_null formicFighter_193|formicfighter_null formicFighter_194|formicfighter_null formicFighter_195|formicfighter_null formicFighter_196|formicfighter_null formicFighter_197|formicfighter_null formicFighter_198|formicfighter_null formicFighter_199|formicfighter_null formicFighter_200|formicfighter_null formicFighter_201|formicfighter_null formicFighter_202|formicfighter_null formicFighter_203|formicfighter_null formicFighter_204|formicfighter_null formicFighter_205|formicfighter_null formicFighter_206|formicfighter_null formicFighter_207|formicfighter_null formicFighter_208|formicfighter_null formicFighter_209|formicfighter_null formicFighter_210|formicfighter_null formicFighter_211|formicfighter_null formicFighter_212|formicfighter_null formicFighter_213|formicfighter_null formicFighter_214|formicfighter_null formicFighter_215|formicfighter_null formicFighter_216|formicfighter_null formicFighter_217|formicfighter_null formicFighter_218|formicfighter_null formicFighter_219|formicfighter_null formicFighter_220|formicfighter_null formicFighter_221|formicfighter_null formicFighter_222|formicfighter_null formicFighter_223|formicfighter_null formicFighter_224|formicfighter_null formicFighter_225|formicfighter_null formicFighter_226|formicfighter_null formicFighter_227|formicfighter_null formicFighter_228|formicfighter_null formicFighter_229|formicfighter_null formicFighter_230|formicfighter_null formicFighter_231|formicfighter_null formicFighter_232|formicfighter_null formicFighter_233|formicfighter_null formicFighter_234|formicfighter_null formicFighter_235|formicfighter_null formicFighter_236|formicfighter_null formicFighter_237|formicfighter_null formicFighter_238|formicfighter_null formicFighter_239|formicfighter_null formicFighter_240|formicfighter_null formicFighter_241|formicfighter_null formicFighter_242|formicfighter_null formicFighter_243|formicfighter_null formicFighter_244|formicfighter_null formicFighter_245|formicfighter_null formicFighter_246|formicfighter_null formicFighter_247|formicfighter_null formicFighter_248|formicfighter_null formicFighter_249|formicfighter_null formicFighter_250|formicfighter_null formicFighter_251|formicfighter_null formicFighter_252|formicfighter_null formicFighter_253|formicfighter_null formicFighter_254|formicfighter_null formicFighter_255|formicfighter_null formicFighter_256|formicfighter_null formicFighter_257|formicfighter_null formicFighter_258|formicfighter_null formicFighter_259|formicfighter_null formicFighter_260|formicfighter_null formicFighter_261|formicfighter_null formicFighter_262|formicfighter_null formicFighter_263|formicfighter_null formicFighter_264|formicfighter_null formicFighter_265|formicfighter_null formicFighter_266|formicfighter_null formicFighter_267|formicfighter_null formicFighter_268|formicfighter_null formicFighter_269|formicfighter_null formicFighter_270|formicfighter_null formicFighter_271|formicfighter_null formicFighter_272|formicfighter_null formicFighter_273|formicfighter_null formicFighter_274|formicfighter_null formicFighter_275|formicfighter_null formicFighter_276|formicfighter_null formicFighter_277|formicfighter_null formicFighter_278|formicfighter_null formicFighter_279|formicfighter_null formicFighter_280|formicfighter_null formicFighter_281|formicfighter_null formicFighter_282|formicfighter_null formicFighter_283|formicfighter_null;
+    select -add dreadnought_01 dreadnought_02 dreadnought_03;
+    pickWalk -d down;
+    pickWalk -d left;
+    delete;      
+}
+
+proc ajQueryObjType()
+{
+    int $i;
+    string $selection[] = `ls -sl`;
+    for ($i=0;$i<size($selection);$i=$i+1)
+    {
+        string $objType[] = `objectType $selection[$i]`;
+        print ($selection[$i] + " is of obj type " + $objType[0] = "\n");
+    }
+}
+
+////////////////////////////////////////////////////////
+//                  CONSTRAIN PROCS
+////////////////////////////////////////////////////////
+
+proc ajCreateLocatorOnObject()
+{
+    int $i;
+    string $selection[] = `ls -sl`;
+    for ($i=0; $i<size($selection); $i=$i+1)
+    {
+        spaceLocator -n ($selection[$i] + "_loc");
+        parentConstraint $selection[$i] ($selection[$i] + "_loc");
+    }
+}
+
+proc ajCreateLocatorObjectOn()
+{
+    int $i;
+    string $selection[] = `ls -sl`;
+    for ($i=0; $i<size($selection); $i=$i+1)
+    {
+        spaceLocator -n ($selection[$i] + "_loc");
+        delete `parentConstraint -weight 1 $selection[$i] ($selection[$i] + "_loc")`;
+        parentConstraint -weight 1 ($selection[$i] + "_loc") $selection[$i];
+    }
+}
+
+////////////////////////////////////////////////////////
+//                  MODELING PROCS
+////////////////////////////////////////////////////////
+
+proc ajExtractFaces(string $ajNewNameInput)
+{
+    //Variables
+    string $newName = `textField -query -text $ajNewNameInput`;
+    int $i;
+    int $n;
+    string $selection[] = `ls -sl`;
+    
+    //Seperate the shit
+    polyChipOff -ch 0 -kft 1 -dup 0 $selection;
+    string $newFaces[] = `ls -sl`;
+    select -r $newFaces;
+    SeparatePolygon;
+    
+    //Combine and delete history
+    string $newMesh[] = `ls -sl`;
+    select -r $newMesh;
+    DeleteHistory;
+    pickWalk -d up;
+    string $toDelete[] = `ls -sl`;
+    print ($toDelete);
+    select -r $newMesh;
+    parent -w;
+    delete $toDelete;
+    int $lastSelected = `size($newMesh)`;
+    if (size($newMesh)>2)
+    {
+        select -d $newMesh[$lastSelected - 1];
+        CombinePolygons;
+        string $combinedShit[] = `ls -sl`;
+        pickWalk -d up;
+        string $combinedTransform[] = `ls -sl`;
+        select -r $combinedShit;
+        DeleteHistory;
+        parent -w;
+        rename ($newName + "_piece_01");
+        delete $combinedTransform;
+    for ($n=0; $n<size($newMesh); $n=$n+1)
+        {
+            if (`objExists ($newMesh[$n])`)
+            select -add $newMesh[$n];
+        }
+        
+    }
+    for ($i=0; $i<size($newMesh); $i=$i+1)
+    {
+        rename $newMesh[$i] ($newName + "_piece_01");
+    }
+    string $newBaseName[] = `ls -sl`;
+    int $lastBro = `size($newBaseName)`;
+    select -r $newBaseName;
+    DeleteHistory;
+    select -d $newBaseName[$lastBro - 1];
+    select -r ($newBaseName[$lastBro - 1]);
+    doMenuComponentSelection(($newBaseName[$lastBro - 1]), "facet");
+}
+
+////////////////////////////////////////////////////////
+//                  Andy Rig PROCS
+////////////////////////////////////////////////////////
+
+//Andy Rig Procs
+proc ajSetPose()
+{
+    int $i;
+    int $n;
+    string $selection[] = `ls -sl`;
+    string $trArray[] = {".tx",".ty",".tz",".rx",".ry",".rz"};
+    select -r andy_spine_Root rig_andy_spine_0_Hips rig_andy_ankle_l_SW rig_andy_ankle_r_SW rig_andy_spine_0_Mid rig_andy_spine_0FK1 rig_andy_spine_0FK2 rig_andy_spine_0FK3 rig_andy_spine_0_Shoulders andy_neck_FK_Cntrl rig_andy_wrist_l_SW andy_finger_Cntrl0_l rig_andy_clavicle_l_FK_Cntrl rig_andy_wrist_r_SW andy_finger_Cntrl0_r rig_andy_clavicle_r_FK_Cntrl andy_neck_IK_Cntrl andy_arm_IK_Cntrl_l andy_arm_PV_Cntrl_l andy_arm_IK_Cntrl_r andy_arm_PV_Cntrl_r andy_leg_IKleg_Cntrl_l andy_leg_PV_Cntrl_l andy_leg_IKleg_Cntrl_r andy_leg_PV_Cntrl_r ;
+    string $andyRig[] = `ls -sl`;
+    for ($i=0; $i<size($andyRig);$i=$i+1)
+    {
+        for ($n=0; $n<size($trArray);$n=$n+1)
+        {
+            setKeyframe ($andyRig[$i] + $trArray[$n]);
+        }        
+    }
+    select $selection;
+}
+
+proc ajAndyFaceCTRLs()
+{
+    string $selection[] = `ls -sl`;
+    int $faceOnOff = `getAttr andy_world.FaceSliders`;
+    if ($faceOnOff == 1)
+    {
+        setAttr "andy_world.FaceSliders" 0;
+    }
+    else 
+    {
+        setAttr "andy_world.FaceSliders" 1;
+    }
+}
+
+/////////////////////////////////
+//Save as...
+proc saveScene()
+{
+    SaveScene;
+}
+
+/////////////////////////////////
+//Save as...
+proc saveAs()
+{
+    SaveSceneAs;
+}
+
+/////////////////////////////////
+//Version Up
+proc savePlusProc() {
+string $filePath = `file -q -sn`;
+string $pathTokens[];
+int $tokenCount = `tokenize ($filePath) "//" $pathTokens`;
+string $fileName = $pathTokens[$tokenCount-1];
+string $filePath = `substring $filePath 1 (size($filePath) - size($fileName))`;
+
+	if($fileName == "") 
+	{
+		print("You need to initially save this file first!\n");
+	} else {
+
+		string $fileNameArray[];
+		for($i=0;$i<size($fileName);$i++) {
+			$fileNameArray[$i] = `substring $fileName ($i + 1) ($i + 1)`;
+		}
+
+		string $prefix = "";
+		string $suffix = "";
+		int $fileNumber = 0;
+		int $numStart = 1;
+		int $numEnd = -2;
+		int $digitCount = 2;
+		for($i = size($fileNameArray) - 1; $i > -1; $i--) {
+			if(isValidString($fileNameArray[$i], "([0-9])")) {
+				$numEnd = $i + 1;
+				break;
+			}
+		}
+		if($numEnd == -2) {
+			$fileNumber = 1;
+			$prefix = `substring $fileName 1 (size($fileName)-3)`;
+			string $fileExt = `substring $fileName (size($fileName)-2) (size($fileName))`;
+			if($fileExt == ".mb" || $fileExt == ".ma") {
+				$suffix = $fileExt;
+			} else {
+				$prefix += $fileExt;
+			}
+		} else {
+			for($i = $numEnd - 1; $i > -1; $i--) {
+				if(!(isValidString($fileNameArray[$i], "([0-9])"))) {
+					$numStart = $i + 2;
+					break;
+				}
+			}
+			$digitCount = ($numEnd - $numStart) + 1;
+			$fileNumber = `substring $fileName $numStart $numEnd`;
+			if($numStart > 1) {
+				$prefix = `substring $fileName 1 ($numStart-1)`;
+			}
+			if($numEnd < size($fileName)) {
+				$suffix = `substring $fileName ($numEnd+1) (size($fileName))`;
+			}
+		}
+
+		$fileNumber++;
+		string $fileNumStr = $fileNumber;
+		string $zeros = "";
+		if($digitCount > size($fileNumStr)) {
+			for($i=0;$i<($digitCount-size($fileNumStr));$i++) {
+				$zeros += "0";
+			}
+		}
+
+		string $newFile = $filePath + $prefix + $zeros + $fileNumber + $suffix;
+		if(`filetest -f $newFile`) {
+			print("Warning: " + $newFile + " already exists, file not saved\n");
+		} else {
+			file -rn ($newFile);
+			file -save;
+			print($newFile + " saved.\n");
+		}
+	}
+}
+showWindow maryTools;
